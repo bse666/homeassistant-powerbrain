@@ -7,6 +7,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -70,11 +71,13 @@ class EnableChargingSwitchEntity(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
+        _LOGGER.debug("Turning on %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_charging, False)
         await _async_refresh_and_verify(self, True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
+        _LOGGER.debug("Turning off %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_charging, True)
         await _async_refresh_and_verify(self, False)
 
@@ -110,6 +113,7 @@ class EnableRulesSwitchEntity(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
+        _LOGGER.debug("Turning on %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(
             self.device.disable_charging_rules, False
         )
@@ -117,6 +121,7 @@ class EnableRulesSwitchEntity(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
+        _LOGGER.debug("Turning off %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_charging_rules, True)
         await _async_refresh_and_verify(self, False)
 
@@ -141,11 +146,13 @@ class EnableUserRulesSwitchEntity(EnableRulesSwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
+        _LOGGER.debug("Turning on %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_user_rules, False)
         await _async_refresh_and_verify(self, True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
+        _LOGGER.debug("Turning off %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_user_rules, True)
         await _async_refresh_and_verify(self, False)
 
@@ -157,15 +164,14 @@ class EnableUserRulesSwitchEntity(EnableRulesSwitchEntity):
 
 
 async def _async_refresh_and_verify(entity: SwitchEntity, expected: bool) -> None:
-    """Refresh data and warn if the Powerbrain ignored the command."""
+    """Refresh data and report an error if the Powerbrain ignored the command."""
     await entity.coordinator.async_refresh()
     if entity.is_on != expected:
-        _LOGGER.warning(
-            "%s on %s: Powerbrain accepted the command but the state did not "
-            "change (overrides=%s). The wallbox may require an RFID/PIN or "
-            "admin rights for this action",
-            entity.name,
-            entity.device.name,
-            entity.device.attributes.get("overrides"),
+        msg = (
+            f"{entity.device.name} / {entity.name}: the Powerbrain accepted the "
+            "command but the state did not change "
+            f"(overrides={entity.device.attributes.get('overrides')}). The wallbox "
+            "may require an RFID/PIN (see integration options) or admin rights."
         )
-
+        _LOGGER.warning(msg)
+        raise HomeAssistantError(msg)

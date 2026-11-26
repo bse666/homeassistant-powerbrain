@@ -1,5 +1,6 @@
 """cFos Powerbrain http API interface."""
 import logging
+import re
 
 import requests
 
@@ -16,6 +17,7 @@ API_OVERRIDE_FLAGS = "&flags="
 API_DEV_ID = "&dev_id="
 API_VAR_VAL = "&val="
 API_SET_METER = "/cnf?cmd=set_ajax_meter"
+API_RFID = "&rfid="
 
 
 class Powerbrain:
@@ -30,6 +32,8 @@ class Powerbrain:
         self.devices = {}
         self.attributes = {}
         self.version = 0.0
+        # Optional RFID/PIN sent with override commands (some flags need it)
+        self.rfid = ""
 
     def validate_auth(self):
         """Make a request to check if given admin username and password are valid."""
@@ -100,10 +104,14 @@ class Device:
 class Evse(Device):
     """EVSE device."""
 
+    def _rfid_param(self) -> str:
+        """Return the rfid url parameter if an RFID/PIN is configured."""
+        return f"{API_RFID}{self.brain.rfid}" if self.brain.rfid else ""
+
     def override_current_limit(self, value: float):
         """Override max charging current."""
         response = requests.get(
-            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAG_AMPS}{int(value)}",
+            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAG_AMPS}{int(value)}{self._rfid_param()}",
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
@@ -112,7 +120,7 @@ class Evse(Device):
     def disable_charging(self, disable: bool):
         """Disable or enable charging."""
         response = requests.get(
-            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAGS}{'C' if disable else 'c'}",
+            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAGS}{'C' if disable else 'c'}{self._rfid_param()}",
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
@@ -121,7 +129,7 @@ class Evse(Device):
     def disable_charging_rules(self, disable: bool):
         """Disable or enable evse charging rules."""
         response = requests.get(
-            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAGS}{'E' if disable else 'e'}",
+            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAGS}{'E' if disable else 'e'}{self._rfid_param()}",
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
@@ -130,7 +138,7 @@ class Evse(Device):
     def disable_user_rules(self, disable: bool):
         """Disable or enable user charging rules."""
         response = requests.get(
-            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAGS}{'U' if disable else 'u'}",
+            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAGS}{'U' if disable else 'u'}{self._rfid_param()}",
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
@@ -155,7 +163,9 @@ def _check_response(response: requests.Response) -> None:
     """Log the Powerbrain answer and raise if it reports an error."""
     _LOGGER.debug(
         "Powerbrain %s -> HTTP %s: %s",
-        response.request.url if response.request else "",
+        re.sub(r"rfid=[^&]*", "rfid=***", response.request.url or "")
+        if response.request
+        else "",
         response.status_code,
         response.text[:500],
     )
