@@ -21,16 +21,6 @@ from .powerbrain import Powerbrain
 
 _LOGGER = logging.getLogger(__name__)
 
-PAUSE_REASON_MAP = {
-    0: "None",
-    1: "Current limit",
-    2: "Charging rules",
-    3: "Manual pause",
-    4: "Phase switch",
-    5: "Error",
-}
-
-
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -242,11 +232,13 @@ def create_evse_entities(coordinator: PowerbrainUpdateCoordinator, device: Devic
 
     # ── New sensors ───────────────────────────────────────────────────────────
 
-    # Session energy (Wh → kWh). Resets each charging session.
+    # Session energy (Wh -> kWh). Resets each charging session.
     ret.append(
         PowerbrainDeviceSensor(
             coordinator, device, "ta_en", "Session Energy", "kWh",
-            SensorDeviceClass.ENERGY, SensorStateClass.TOTAL, 0.001,
+            SensorDeviceClass.ENERGY, SensorStateClass.TOTAL,
+            # firmware reports -1 when there is no active session
+            lambda wh: max(wh, 0) / 1000,
         )
     )
 
@@ -263,22 +255,6 @@ def create_evse_entities(coordinator: PowerbrainUpdateCoordinator, device: Devic
         PowerbrainDeviceSensor(
             coordinator, device, "used_phases", "Used Phases",
             None, None, SensorStateClass.MEASUREMENT,
-        )
-    )
-
-    # Pause reason (human-readable)
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "pause_reason", "Pause Reason",
-            state_modifier=lambda r: PAUSE_REASON_MAP.get(r, f"Unknown ({r})"),
-        )
-    )
-
-    # Pause remaining time in seconds (0 when not paused)
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "pause_time", "Pause Time Remaining", "s",
-            SensorDeviceClass.DURATION, SensorStateClass.MEASUREMENT,
         )
     )
 
