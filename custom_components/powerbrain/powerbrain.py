@@ -98,7 +98,7 @@ class Evse(Device):
     def override_current_limit(self, value: float):
         """Override max charging current."""
         response = requests.get(
-            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAG_AMPS}{value}",
+            f"{self.brain.host}{API_OVERRIDE_DEVICE}{self.dev_id}{API_OVERRIDE_FLAG_AMPS}{int(value)}",
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
