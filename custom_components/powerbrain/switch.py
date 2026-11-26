@@ -1,5 +1,4 @@
 """Switch platform of powerbrain integration."""
-import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchDeviceClass
@@ -7,7 +6,6 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -17,8 +15,6 @@ from .__init__ import PowerbrainUpdateCoordinator
 from .const import DOMAIN
 from .powerbrain import Evse
 from .powerbrain import Powerbrain
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -71,24 +67,17 @@ class EnableChargingSwitchEntity(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
-        _LOGGER.debug("Turning on %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_charging, False)
-        await _async_refresh_and_verify(self, True)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
-        _LOGGER.debug("Turning off %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_charging, True)
-        await _async_refresh_and_verify(self, False)
+        await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
-
-    @property
-    def assumed_state(self) -> bool:
-        """State is assumed when the firmware does not report override flags."""
-        return "overrides" not in self.device.attributes
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -98,10 +87,7 @@ class EnableChargingSwitchEntity(CoordinatorEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Switch status."""
-        if "overrides" not in self.device.attributes:
-            # Firmware 2.x no longer reports override flags: show last command
-            return self._attr_is_on is not False
-        overridebit1 = self.device.attributes["overrides"] & 0b0001
+        overridebit1 = self.device.attributes.get("overrides", 0) & 0b0001
         return not overridebit1
 
 
@@ -121,26 +107,19 @@ class EnableRulesSwitchEntity(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
-        _LOGGER.debug("Turning on %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(
             self.device.disable_charging_rules, False
         )
-        await _async_refresh_and_verify(self, True)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
-        _LOGGER.debug("Turning off %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_charging_rules, True)
-        await _async_refresh_and_verify(self, False)
+        await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
-
-    @property
-    def assumed_state(self) -> bool:
-        """State is assumed when the firmware does not report override flags."""
-        return "overrides" not in self.device.attributes
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -150,10 +129,7 @@ class EnableRulesSwitchEntity(CoordinatorEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Switch status."""
-        if "overrides" not in self.device.attributes:
-            # Firmware 2.x no longer reports override flags: show last command
-            return self._attr_is_on is not False
-        overridebit2 = self.device.attributes["overrides"] & 0b0010
+        overridebit2 = self.device.attributes.get("overrides", 0) & 0b0010
         return not overridebit2
 
 
@@ -162,47 +138,16 @@ class EnableUserRulesSwitchEntity(EnableRulesSwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
-        _LOGGER.debug("Turning on %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_user_rules, False)
-        await _async_refresh_and_verify(self, True)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
-        _LOGGER.debug("Turning off %s on %s", self.name, self.device.name)
         await self.hass.async_add_executor_job(self.device.disable_user_rules, True)
-        await _async_refresh_and_verify(self, False)
+        await self.coordinator.async_request_refresh()
 
     @property
     def is_on(self) -> bool:
         """Switch status."""
-        if "overrides" not in self.device.attributes:
-            # Firmware 2.x no longer reports override flags: show last command
-            return self._attr_is_on is not False
-        overridebit3 = self.device.attributes["overrides"] & 0b0100
+        overridebit3 = self.device.attributes.get("overrides", 0) & 0b0100
         return not overridebit3
-
-
-async def _async_refresh_and_verify(entity: SwitchEntity, expected: bool) -> None:
-    """Refresh data and report an error if the Powerbrain ignored the command."""
-    entity._attr_is_on = expected  # pylint: disable=protected-access
-    await entity.coordinator.async_refresh()
-    if "overrides" not in entity.device.attributes:
-        # Newer firmware does not report the override state, so it cannot be
-        # verified. The switch shows the last command (assumed state).
-        _LOGGER.debug(
-            "%s on %s: firmware reports no override flags, assuming %s",
-            entity.name,
-            entity.device.name,
-            "on" if expected else "off",
-        )
-        entity.async_write_ha_state()
-        return
-    if entity.is_on != expected:
-        msg = (
-            f"{entity.device.name} / {entity.name}: the Powerbrain accepted the "
-            "command but the state did not change "
-            f"(overrides={entity.device.attributes.get('overrides')}). The wallbox "
-            "may require an RFID/PIN (see integration options) or admin rights."
-        )
-        _LOGGER.warning(msg)
-        raise HomeAssistantError(msg)

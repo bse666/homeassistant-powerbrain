@@ -21,10 +21,12 @@ from .powerbrain import Powerbrain
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Config entry example."""
+    # assuming API object stored here by __init__.py
     brain: Powerbrain = hass.data[DOMAIN][entry.entry_id]
 
     entities = []
@@ -58,14 +60,12 @@ class PowerbrainDeviceSensor(CoordinatorEntity, SensorEntity):
         deviceclass: str = None,
         stateclass: str = None,
         state_modifier: Any = None,
-        nested_path: list = None,
     ) -> None:
         """Initialize sensor attributes."""
         super().__init__(coordinator)
         self.device = device
         self.attribute = attr
         self.state_modifier = state_modifier
-        self.nested_path = nested_path  # e.g. ["evse", "cp_state"]
         self._attr_has_entity_name = True
         self._attr_unique_id = f"{coordinator.brain.attributes['vsn']['serialno']}_{self.device.dev_id}_{name}"
         self._attr_name = name
@@ -73,32 +73,17 @@ class PowerbrainDeviceSensor(CoordinatorEntity, SensorEntity):
         self._attr_device_class = deviceclass
         self._attr_state_class = stateclass
 
-    def _get_raw_value(self):
-        """Get raw value from device attributes, supporting nested paths."""
-        if self.nested_path:
-            value = self.device.attributes
-            for key in self.nested_path:
-                if isinstance(value, dict) and key in value:
-                    value = value[key]
-                else:
-                    return None
-            return value
-        return self.device.attributes.get(self.attribute)
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        raw = self._get_raw_value()
-        if raw is None:
-            return
 
         new_value = 0
         if self.state_modifier is None:
-            new_value = raw
+            new_value = self.device.attributes[self.attribute]
         elif isinstance(self.state_modifier, types.LambdaType):
-            new_value = self.state_modifier(raw)
+            new_value = self.state_modifier(self.device.attributes[self.attribute])
         else:
-            new_value = raw * self.state_modifier
+            new_value = self.device.attributes[self.attribute] * self.state_modifier
 
         if (
             self._attr_native_value is None
@@ -124,56 +109,106 @@ def create_meter_entities(coordinator: PowerbrainUpdateCoordinator, device: Devi
             power_unit = "VA"
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "power_w" if coordinator.brain.version >= 1.2 else "power",
-            "Power", power_unit, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT,
+            coordinator,
+            device,
+            "power_w" if coordinator.brain.version >= 1.2 else "power",
+            "Power",
+            power_unit,
+            SensorDeviceClass.POWER,
+            SensorStateClass.MEASUREMENT,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "import", "Import", "kWh",
-            SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, 0.001,
+            coordinator,
+            device,
+            "import",
+            "Import",
+            "kWh",
+            SensorDeviceClass.ENERGY,
+            SensorStateClass.TOTAL_INCREASING,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "export", "Export", "kWh",
-            SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, 0.001,
+            coordinator,
+            device,
+            "export",
+            "Export",
+            "kWh",
+            SensorDeviceClass.ENERGY,
+            SensorStateClass.TOTAL_INCREASING,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "current_l1", "Current L1", "A",
-            SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, 0.001,
+            coordinator,
+            device,
+            "current_l1",
+            "Current L1",
+            "A",
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "current_l2", "Current L2", "A",
-            SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, 0.001,
+            coordinator,
+            device,
+            "current_l2",
+            "Current L2",
+            "A",
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "current_l3", "Current L3", "A",
-            SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, 0.001,
+            coordinator,
+            device,
+            "current_l3",
+            "Current L3",
+            "A",
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "voltage_l1", "Voltage L1", "V",
-            SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT,
+            coordinator,
+            device,
+            "voltage_l1",
+            "Voltage L1",
+            "V",
+            SensorDeviceClass.VOLTAGE,
+            SensorStateClass.MEASUREMENT,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "voltage_l2", "Voltage L2", "V",
-            SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT,
+            coordinator,
+            device,
+            "voltage_l2",
+            "Voltage L2",
+            "V",
+            SensorDeviceClass.VOLTAGE,
+            SensorStateClass.MEASUREMENT,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "voltage_l3", "Voltage L3", "V",
-            SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT,
+            coordinator,
+            device,
+            "voltage_l3",
+            "Voltage L3",
+            "V",
+            SensorDeviceClass.VOLTAGE,
+            SensorStateClass.MEASUREMENT,
         )
     )
     return ret
@@ -183,24 +218,35 @@ def create_evse_entities(coordinator: PowerbrainUpdateCoordinator, device: Devic
     """Create the entities for an evse device."""
     ret = []
 
-    # ── Existing sensors ──────────────────────────────────────────────────────
-
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device,
+            coordinator,
+            device,
             "power_w" if coordinator.brain.version >= 1.2 else "cur_charging_power",
-            "Charging Power", "W", SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT,
+            "Charging Power",
+            "W",
+            SensorDeviceClass.POWER,
+            SensorStateClass.MEASUREMENT,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "total_energy", "Total Charging Energy", "kWh",
-            SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, 0.001,
+            coordinator,
+            device,
+            "total_energy",
+            "Total Charging Energy",
+            "kWh",
+            SensorDeviceClass.ENERGY,
+            SensorStateClass.TOTAL_INCREASING,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "state", "State",
+            coordinator,
+            device,
+            "state",
+            "State",
             state_modifier=lambda s: {
                 1: "1: Standby",
                 2: "2: Car connected",
@@ -208,78 +254,43 @@ def create_evse_entities(coordinator: PowerbrainUpdateCoordinator, device: Devic
                 4: "4: Charging/vent",
                 5: "5: Error",
                 6: "6: Offline",
-            }.get(s, f"Unknown ({s})"),
+            }[s],
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "current_l1", "Current L1", "A",
-            SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, 0.001,
+            coordinator,
+            device,
+            "current_l1",
+            "Current L1",
+            "A",
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "current_l2", "Current L2", "A",
-            SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, 0.001,
+            coordinator,
+            device,
+            "current_l2",
+            "Current L2",
+            "A",
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+            0.001,
         )
     )
     ret.append(
         PowerbrainDeviceSensor(
-            coordinator, device, "current_l3", "Current L3", "A",
-            SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, 0.001,
+            coordinator,
+            device,
+            "current_l3",
+            "Current L3",
+            "A",
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+            0.001,
         )
     )
-
-    # ── New sensors ───────────────────────────────────────────────────────────
-
-    # Session energy (Wh -> kWh). Resets each charging session.
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "ta_en", "Session Energy", "kWh",
-            SensorDeviceClass.ENERGY, SensorStateClass.TOTAL,
-            # firmware reports -1 when there is no active session
-            lambda wh: max(wh, 0) / 1000,
-        )
-    )
-
-    # Last commanded charging current (mA → A)
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "last_set_charging_cur", "Last Set Charging Current", "A",
-            SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, 0.001,
-        )
-    )
-
-    # Number of phases currently in use
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "used_phases", "Used Phases",
-            None, None, SensorStateClass.MEASUREMENT,
-        )
-    )
-
-    # CP (Control Pilot) state — from nested evse object
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "cp_state", "CP State",
-            nested_path=["evse", "cp_state"],
-        )
-    )
-
-    # PP (Proximity Pilot) state — cable detection
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "pp_state", "PP State",
-            nested_path=["evse", "pp_state"],
-        )
-    )
-
-    # Total cumulative charging duration in seconds
-    ret.append(
-        PowerbrainDeviceSensor(
-            coordinator, device, "charging_dur", "Total Charging Duration", "s",
-            SensorDeviceClass.DURATION, SensorStateClass.TOTAL_INCREASING,
-        )
-    )
-
     return ret

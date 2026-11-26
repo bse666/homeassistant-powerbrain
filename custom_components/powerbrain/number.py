@@ -54,16 +54,14 @@ class EvseLimitCurrentEntity(CoordinatorEntity, NumberEntity):
         await self.hass.async_add_executor_job(
             self.device.override_current_limit, value * 1000
         )
-        self._attr_native_value = value
         await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        if "ov_cur" in self.device.attributes:
-            self._attr_native_value = self.device.attributes["ov_cur"] / 1000
-        elif self._attr_native_value is None:
-            # Firmware 2.x does not report the override; keep the last set value
-            self._attr_native_value = self._attr_native_max_value
+        self._attr_native_value = (
+            self.device.attributes.get("ov_cur", self._attr_native_max_value * 1000)
+            / 1000
+        )
         self.async_write_ha_state()
 
     @property
