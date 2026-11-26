@@ -106,23 +106,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
-        return OptionsFlowHandler(config_entry)
+        return OptionsFlowHandler()
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Powerbrain options flow handler."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-        self.update_interval = config_entry.data[CONF_SCAN_INTERVAL]
-        if config_entry.options.get(CONF_SCAN_INTERVAL):
-            self.update_interval = config_entry.options.get(CONF_SCAN_INTERVAL)
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
+        # self.config_entry is provided by Home Assistant; assigning it in
+        # __init__ is no longer allowed (HA 2025.12+).
+        update_interval = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, self.config_entry.data[CONF_SCAN_INTERVAL]
+        )
         if user_input is not None:
             return self.async_create_entry(
                 title=self.config_entry.title, data=user_input
@@ -134,7 +132,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_SCAN_INTERVAL,
-                        default=self.update_interval,
+                        default=update_interval,
                     ): cv.positive_int
                 }
             ),
