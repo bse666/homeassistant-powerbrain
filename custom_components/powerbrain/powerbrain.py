@@ -1,5 +1,9 @@
 """cFos Powerbrain http API interface."""
+import logging
+
 import requests
+
+_LOGGER = logging.getLogger(__name__)
 
 API_GET_VALIDATE_AUTH = "/ui/en/sim.htm"
 API_GET_PARAMS = "/cnf?cmd=get_params"
@@ -70,11 +74,12 @@ class Powerbrain:
 
     def set_variable(self, name, value):
         """Set value of a charging manager variable"""
-        requests.get(
+        response = requests.get(
             f"{self.host}{API_GET_SET_VAR}{name}{API_VAR_VAL}{value}",
             timeout=5,
             auth=(self.username, self.password),
         )
+        _check_response(response)
 
 
 class Device:
@@ -102,7 +107,7 @@ class Evse(Device):
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
-        response.raise_for_status()
+        _check_response(response)
 
     def disable_charging(self, disable: bool):
         """Disable or enable charging."""
@@ -111,7 +116,7 @@ class Evse(Device):
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
-        response.raise_for_status()
+        _check_response(response)
 
     def disable_charging_rules(self, disable: bool):
         """Disable or enable evse charging rules."""
@@ -120,7 +125,7 @@ class Evse(Device):
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
-        response.raise_for_status()
+        _check_response(response)
 
     def disable_user_rules(self, disable: bool):
         """Disable or enable user charging rules."""
@@ -129,7 +134,7 @@ class Evse(Device):
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
-        response.raise_for_status()
+        _check_response(response)
 
 
 class Meter(Device):
@@ -143,4 +148,33 @@ class Meter(Device):
             timeout=5,
             auth=(self.brain.username, self.brain.password),
         )
-        response.raise_for_status()
+        _check_response(response)
+
+
+def _check_response(response: requests.Response) -> None:
+    """Log the Powerbrain answer and raise if it reports an error."""
+    _LOGGER.debug(
+        "Powerbrain %s -> HTTP %s: %s",
+        response.request.url if response.request else "",
+        response.status_code,
+        response.text[:500],
+    )
+    if response.status_code == 401:
+        raise PowerbrainAuthError(
+            "Powerbrain rejected the admin username/password (HTTP 401)"
+        )
+    response.raise_for_status()
+    try:
+        data = response.json()
+    except ValueError:
+        return
+    if isinstance(data, dict) and data.get("error"):
+        raise PowerbrainCommandError(f"Powerbrain returned an error: {data}")
+
+
+class PowerbrainAuthError(Exception):
+    """Authentication with the Powerbrain failed."""
+
+
+class PowerbrainCommandError(Exception):
+    """The Powerbrain rejected a command."""
