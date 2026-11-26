@@ -23,6 +23,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
+from .const import CONF_RFID
 from .const import DOMAIN
 from .powerbrain import Device
 from .powerbrain import Powerbrain
@@ -121,6 +122,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_HOST], entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
     )
 
+    brain.rfid = entry.options.get(CONF_RFID, "")
+
     # Validate the API connection (and authentication)
     try:
         await hass.async_add_executor_job(brain.get_devices)
@@ -163,9 +166,11 @@ async def update_listener(hass, entry):
     coordinator: PowerbrainUpdateCoordinator = hass.data[DOMAIN][
         entry.entry_id + "_coordinator"
     ]
-    coordinator.update_interval = timedelta(
-        seconds=entry.options.get(CONF_SCAN_INTERVAL)
-    )
+    if entry.options.get(CONF_SCAN_INTERVAL):
+        coordinator.update_interval = timedelta(
+            seconds=entry.options.get(CONF_SCAN_INTERVAL)
+        )
+    coordinator.brain.rfid = entry.options.get(CONF_RFID, "")
 
 
 async def async_remove_config_entry_device(

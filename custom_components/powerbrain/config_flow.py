@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
+from .const import CONF_RFID
 from .const import DOMAIN
 from .powerbrain import Powerbrain
 
@@ -133,7 +134,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_SCAN_INTERVAL,
                         default=update_interval,
-                    ): cv.positive_int
+                    ): cv.positive_int,
+                    vol.Optional(
+                        CONF_RFID,
+                        default=self.config_entry.options.get(CONF_RFID, ""),
+                    ): cv.string,
                 }
             ),
         )

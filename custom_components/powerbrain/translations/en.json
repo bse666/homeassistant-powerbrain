@@ -25,7 +25,8 @@
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Update Interval [s]"
+          "scan_interval": "Update Interval [s]",
+          "rfid": "RFID/PIN for switch commands (optional)"
         }
       }
     }

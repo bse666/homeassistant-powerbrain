@@ -13,6 +13,7 @@ ICON = "mdi:format-quote-close"
 
 
 # Configuration and options
+CONF_RFID = "rfid"
 
 
 # Defaults
